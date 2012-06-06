@@ -45,12 +45,17 @@ SplitStream::SplitStream(OFStreamFactory * factory, vector<string> splitTag) {
   this->factory = factory;
   this->splitTag = splitTag;
   inSplitArea = false;
+  countLimit = -1;
+  lineLimit = -1;
+  byteLimit = -1;
 }
 SplitStream::~SplitStream() {}
 
 void SplitStream::process(istream & input) {
   string accumulator;
   string line;
+
+  lines = bytes = count = 0;
 
   ofstream output(factory->getStreamName().c_str(), ofstream::out);
 
@@ -61,7 +66,8 @@ void SplitStream::process(istream & input) {
   size_t offset;
   bool running = true;
   input >> line;
-  string current = load(line);
+  string current;
+  bytes += load(current, line);
   while (running) {
     try {
       int a, b, tagType;
@@ -85,6 +91,7 @@ void SplitStream::process(istream & input) {
 	  accumulator.append("\n");
 	  inSplitArea = false;
 	  leavingSplitArea = true;
+	  count++;
 	}
 	currentTag.pop_back();
       }
@@ -98,24 +105,38 @@ void SplitStream::process(istream & input) {
 	    
 	  accumulator.append(current);
 	  accumulator.append("\n");
+	  count++;
 	}
 	currentTag.pop_back();
       }
       if (inSplitArea) {
 	accumulator.append(current);
 	accumulator.append("\n");
+	lines ++;
       }
       if (leavingSplitArea) {
-	for (int i = 0; i < currentTag.size(); i++) {
-	  output << '<' << currentTag[i] << '>' << endl;
+	bool shouldWrite = false;
+	if (lineLimit != -1 && lines >= lineLimit) {
+	  shouldWrite = true;
 	}
-	output << accumulator;
-	for (int i = 0; i < currentTag.size(); i++) {
-	  output << "</" << currentTag[i] << '>' << endl;
+	if (byteLimit != -1 && bytes >= byteLimit) {
+	  shouldWrite = true;
 	}
-	output.close();
-	output.open(factory->getStreamName().c_str(), ofstream::out);
-	accumulator.clear();
+	if (countLimit != -1 && count >= countLimit) {
+	  shouldWrite = true;
+	}
+	if (shouldWrite) {
+	  for (int i = 0; i < currentTag.size(); i++) {
+	    output << '<' << currentTag[i] << '>' << endl;
+	  }
+	  output << accumulator;
+	  for (int i = 0; i < currentTag.size(); i++) {
+	    output << "</" << currentTag[i] << '>' << endl;
+	  }
+	  output.close();
+	  output.open(factory->getStreamName().c_str(), ofstream::out);
+	  accumulator.clear();
+	}
       }
 
     } catch (int e) {
@@ -130,32 +151,44 @@ void SplitStream::process(istream & input) {
       input >> line;	
     }
 
-    current = load(line);
+    bytes += load(current, line);
 
     if (input.fail() || input.eof()) {
+      for (int i = 0; i < currentTag.size(); i++) {
+	output << '<' << currentTag[i] << '>' << endl;
+      }
+      output << accumulator;
+      for (int i = 0; i < currentTag.size(); i++) {
+	output << "</" << currentTag[i] << '>' << endl;
+      }
+      output.close();
+
       running = false;
     }
 
   }
 }
 
-string SplitStream::load(string &input) {
-  string tmp;
+int SplitStream::load(string &output, string &input) {
+  int bytes = 0;
   try {
     int a, b;
     getFirstTagPosition(input, a, b);
     if (a > 0) {
-      tmp = input.substr(0, a);
+      output = input.substr(0, a);
       input.erase(0, a);
+      bytes = a;
     } else {
-      tmp = input.substr(a, b + 1);
+      output = input.substr(a, b + 1);
       input.erase(a, b + 1);
+      bytes = b + 1 - a;
     }
   } catch (int e) {
-    tmp = input;
+    output = input;
+    bytes = input.size();
     input.clear();
   }
-  return tmp;
+  return bytes;
 }
 
 void SplitStream::getFirstTagPosition(string input, int & begin, int & end) {
@@ -221,6 +254,22 @@ bool SplitStream::vectorCompare(vector<string> & a, vector<string> & b) {
   }
   return true;
 }
+
+void SplitStream::setLineLimit(int lines) {
+  cout << "Set line limit to " << lines << endl;
+  this->lineLimit = lines;
+}
+
+void SplitStream::setByteLimit(int bytes) {
+  cout << "Set byte limit to " << bytes << endl;
+  this->byteLimit = bytes;
+}
+
+void SplitStream::setCountLimit(int count) {
+  cout << "Set count limit to " << count << endl;
+  this->countLimit = count;
+}
+
 
 int test() {
   // Run unit tests
@@ -329,16 +378,40 @@ int test() {
   return failed;
 }
 
+int getNumericalArg(const char * argSpec, int argc, char ** argv) {
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], argSpec) == 0) {
+      if (i + 1 < argc) {
+	int limit = atoi(argv[i + 1]);
+	
+	if (limit == 0) {
+	  cerr << "Invalid argument (" << argv[i + 1] << ") to " << argSpec << ", aborting." << endl;
+	  throw 4;
+	}
+	i++;
+	return limit;
+      } else { 
+	cerr << "Need more arguments to " << argSpec << ", aborting." << endl;
+	throw 5;
+      }
+    }
+  }
+  return -1;
+}
+
 int main (int argc, char ** argv) {
   //printf("Failed: %d\n", test());
-  for (int currentArg = 0; currentArg < argc; currentArg++) {
-    
-  }
   vector<string> leaf;
   leaf.push_back("root");
   leaf.push_back("leaf");
+
   OFStreamFactory factory("/Users/callouskitty/xmlSplit", '0', '9', 4);
   SplitStream ss(&factory, leaf);
+
+  ss.setLineLimit(getNumericalArg("-l", argc, argv));
+  ss.setByteLimit(getNumericalArg("-b", argc, argv));
+  ss.setCountLimit(getNumericalArg("-c", argc, argv));
+
   ss.process(cin);
   
 }

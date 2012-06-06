@@ -41,18 +41,25 @@ public:
   
   void process(istream & input);
 
-  string load(string &input);
+  int load(string & target, string &input);
 
   void getFirstTagPosition(string input, int & begin, int & end);
 
   string getTagName(string input, int & tagType);
 
   bool vectorCompare(vector<string> & a, vector<string> & b);
+
+  void setLineLimit(int lines);
+  void setByteLimit(int bytes);
+  void setCountLimit(int count);
   
 private:
   OFStreamFactory * factory;
   vector<string> currentTag;
   vector<string> splitTag;
   bool inSplitArea;
+
+  int lineLimit, byteLimit, countLimit;
+  int lines, bytes, count;
 };
 
