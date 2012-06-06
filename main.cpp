@@ -152,17 +152,17 @@ void SplitStream::process(istream & input) {
     }
 
     bytes += load(current, line);
-
+    
     if (input.fail() || input.eof()) {
-      for (int i = 0; i < currentTag.size(); i++) {
-	output << '<' << currentTag[i] << '>' << endl;
+      if (! accumulator.empty()) {
+	for (int i = 0; i < splitTag.size() - 1; i++) {
+	  output << '<' << splitTag[i] << '>' << endl;
+	}
+	output << accumulator;
+	for (int i = 0; i < splitTag.size() - 1; i++) {
+	  output << "</" << splitTag[i] << '>' << endl;
+	}
       }
-      output << accumulator;
-      for (int i = 0; i < currentTag.size(); i++) {
-	output << "</" << currentTag[i] << '>' << endl;
-      }
-      output.close();
-
       running = false;
     }
 
@@ -399,14 +399,30 @@ int getNumericalArg(const char * argSpec, int argc, char ** argv) {
   return -1;
 }
 
-int main (int argc, char ** argv) {
-  //printf("Failed: %d\n", test());
-  vector<string> leaf;
-  leaf.push_back("root");
-  leaf.push_back("leaf");
+vector<string> getTagSpec(char * tagSpec) {
+  vector<string> tags;
+  string tokens(tagSpec);
+  istringstream tokenizer(tokens);
+  string current;
+  while (getline(tokenizer, current, '/')) {
+    tags.push_back(current);
+  }
+  if (tags.size() == 0) {
+    throw 7;
+  }
+  return tags;
+}
 
+int main (int argc, char ** argv) {
+  vector<string> tagSpec;
+  try {
+    tagSpec = getTagSpec(argv[argc - 1]);
+  } catch (int e) {
+    cerr << "Invalid tag specification" << endl;
+    return 2;
+  }
   OFStreamFactory factory("/Users/callouskitty/xmlSplit", '0', '9', 4);
-  SplitStream ss(&factory, leaf);
+  SplitStream ss(&factory, tagSpec);
 
   ss.setLineLimit(getNumericalArg("-l", argc, argv));
   ss.setByteLimit(getNumericalArg("-b", argc, argv));
