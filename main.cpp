@@ -1,4 +1,4 @@
-#include "main.h"
+#include "main.hpp"
 
 using namespace std;
 
@@ -9,8 +9,9 @@ OFStreamFactory::OFStreamFactory (string _basePath, char _min, char _max, int _n
   this->max = _max;
   this->numChars = _numChars;
 }
+OFStreamFactory::~OFStreamFactory() {}
 
-OFStreamFactory::getName() {
+string OFStreamFactory::getName() {
   int base = max - min + 1;
   int running = current;
   list<char> name;
@@ -40,208 +41,186 @@ string OFStreamFactory::getStreamName() {
   return name;
 }
 
-class SplitStream {
-public:
-  SplitStream(OFStreamFactory * factory, vector<string> splitTag) {
-    this->factory = factory;
-    this->splitTag = splitTag;
-    inSplitArea = false;
-  }
+SplitStream::SplitStream(OFStreamFactory * factory, vector<string> splitTag) {
+  this->factory = factory;
+  this->splitTag = splitTag;
+  inSplitArea = false;
+}
+SplitStream::~SplitStream() {}
 
-  ~SplitStream() {}
+void SplitStream::process(istream & input) {
+  string accumulator;
+  string line;
 
-  void process(istream & input) {
-    string accumulator;
-    string line;
+  ofstream output(factory->getStreamName().c_str(), ofstream::out);
 
-    ofstream output(factory->getStreamName().c_str(), ofstream::out);
+  size_t bytesRead;
 
-    size_t bytesRead;
-
-    size_t tagStart = -1;
-    size_t tagEnd = -1;
-    size_t offset;
-    bool running = true;
-    input >> line;
-    string current = load(line);
-    while (running) {
-      try {
-	int a, b, tagType;
-	bool leavingSplitArea = false;
-	getFirstTagPosition(current, a, b);
-	string tag = current.substr(a, b - a + 1);
-	
-	string tagName = getTagName(tag, tagType);
-
-	if (tagType == TAGTYPE_BEGIN || tagType == TAGTYPE_SINGLETON) {
-	  currentTag.push_back(tagName);
-	  
-	  if (vectorCompare(currentTag, splitTag)) {
-	    inSplitArea = true;
-	  }
-	  
-
-	} else if (tagType == TAGTYPE_END && tagName == currentTag[currentTag.size() - 1]) {
-	  if (vectorCompare(currentTag, splitTag)) {
-	    accumulator.append(current);
-	    accumulator.append("\n");
-	    inSplitArea = false;
-	    leavingSplitArea = true;
-	  }
-	  currentTag.pop_back();
-	}
-	for (int i = 0; i < currentTag.size(); i++) {
-	}
-	
-	if (tagType == TAGTYPE_SINGLETON) {
-	  if (vectorCompare(currentTag, splitTag)) {
-	    inSplitArea = false;
-	    leavingSplitArea = true;
-	    
-	    accumulator.append(current);
-	    accumulator.append("\n");
-	  }
-	  currentTag.pop_back();
-	}
-	if (inSplitArea) {
-	  accumulator.append(current);
-	  accumulator.append("\n");
-	}
-	if (leavingSplitArea) {
-	  for (int i = 0; i < currentTag.size(); i++) {
-	    output << '<' << currentTag[i] << '>' << endl;
-	  }
-	  output << accumulator;
-	  for (int i = 0; i < currentTag.size(); i++) {
-	    output << "</" << currentTag[i] << '>' << endl;
-	  }
-	  output.close();
-	  output.open(factory->getStreamName().c_str(), ofstream::out);
-	  accumulator.clear();
-	}
-
-      } catch (int e) {
-	if (inSplitArea) {
-	  accumulator.append(current);
-	  accumulator.append("\n");
-	}
-
-      }
-
-      if (line.empty()) {
-	input >> line;	
-      }
-
-      current = load(line);
-
-      if (input.fail() || input.eof()) {
-	running = false;
-      }
-
-    }
-    /*
-      while (!accumulator.empty()) {
-      output.write(accumulator.c_str(), accumulator.size());
-      accumulator.clear();
-    }
-    */
-
-  }
-  string load(string &input) {
-    string tmp;
+  size_t tagStart = -1;
+  size_t tagEnd = -1;
+  size_t offset;
+  bool running = true;
+  input >> line;
+  string current = load(line);
+  while (running) {
     try {
-      int a, b;
-      getFirstTagPosition(input, a, b);
-      if (a > 0) {
-	tmp = input.substr(0, a);
-	input.erase(0, a);
-      } else {
-	tmp = input.substr(a, b + 1);
-	input.erase(a, b + 1);
+      int a, b, tagType;
+      bool leavingSplitArea = false;
+      getFirstTagPosition(current, a, b);
+      string tag = current.substr(a, b - a + 1);
+	
+      string tagName = getTagName(tag, tagType);
+
+      if (tagType == TAGTYPE_BEGIN || tagType == TAGTYPE_SINGLETON) {
+	currentTag.push_back(tagName);
+	  
+	if (vectorCompare(currentTag, splitTag)) {
+	  inSplitArea = true;
+	}
+	  
+
+      } else if (tagType == TAGTYPE_END && tagName == currentTag[currentTag.size() - 1]) {
+	if (vectorCompare(currentTag, splitTag)) {
+	  accumulator.append(current);
+	  accumulator.append("\n");
+	  inSplitArea = false;
+	  leavingSplitArea = true;
+	}
+	currentTag.pop_back();
       }
+      for (int i = 0; i < currentTag.size(); i++) {
+      }
+	
+      if (tagType == TAGTYPE_SINGLETON) {
+	if (vectorCompare(currentTag, splitTag)) {
+	  inSplitArea = false;
+	  leavingSplitArea = true;
+	    
+	  accumulator.append(current);
+	  accumulator.append("\n");
+	}
+	currentTag.pop_back();
+      }
+      if (inSplitArea) {
+	accumulator.append(current);
+	accumulator.append("\n");
+      }
+      if (leavingSplitArea) {
+	for (int i = 0; i < currentTag.size(); i++) {
+	  output << '<' << currentTag[i] << '>' << endl;
+	}
+	output << accumulator;
+	for (int i = 0; i < currentTag.size(); i++) {
+	  output << "</" << currentTag[i] << '>' << endl;
+	}
+	output.close();
+	output.open(factory->getStreamName().c_str(), ofstream::out);
+	accumulator.clear();
+      }
+
     } catch (int e) {
-      tmp = input;
-      input.clear();
-    }
-    return tmp;
-  }
-
-  void getFirstTagPosition(string input, int & begin, int & end) {
-    int tagStart = input.find('<', 0);
-    int tagEnd = input.find('>', tagStart + 1);
-    
-    if (tagEnd == string::npos || tagStart == string::npos) {
-      throw 3;
-    }
-    
-    begin = tagStart;
-    end = tagEnd;
-  }
-
-  string getTagName(string input, int & tagType) {
-    int beginTag = input.find('<', 0);
-
-    if (beginTag != 0) {
-      throw 1;
-    }
-    int firstSpace = input.find(' ', 0);
-    int firstSlash = input.find('/', 1);
-    int firstBrace = input.find('>', 0);
-    if (firstBrace == string::npos) {
-      throw 2;
-    }
-    //This means we are dealing with an end tag.
-    if (firstSlash == 1) {
-      int wordEnd = INT_MAX;
-      if (firstSpace != string::npos) {
-	wordEnd = firstSpace;
+      if (inSplitArea) {
+	accumulator.append(current);
+	accumulator.append("\n");
       }
-      if (firstBrace != string::npos && firstBrace < wordEnd) {
-	wordEnd = firstBrace;
-      }
-      tagType = TAGTYPE_END;
-      return input.substr(2, wordEnd - 2);
+
+    }
+
+    if (line.empty()) {
+      input >> line;	
+    }
+
+    current = load(line);
+
+    if (input.fail() || input.eof()) {
+      running = false;
+    }
+
+  }
+}
+
+string SplitStream::load(string &input) {
+  string tmp;
+  try {
+    int a, b;
+    getFirstTagPosition(input, a, b);
+    if (a > 0) {
+      tmp = input.substr(0, a);
+      input.erase(0, a);
     } else {
-      int wordEnd = INT_MAX;
-      if (firstSpace != string::npos) {
-	wordEnd = firstSpace;
-      }
-      if (firstBrace != string::npos && firstBrace < wordEnd) {
-	wordEnd = firstBrace;
-      }
-      if (firstSlash != string::npos && firstSlash < wordEnd) {
-	wordEnd = firstSlash;
-	tagType = TAGTYPE_SINGLETON;
-      } else {
-	tagType = TAGTYPE_BEGIN;
-      }
-      return input.substr(1, wordEnd - 1);
+      tmp = input.substr(a, b + 1);
+      input.erase(a, b + 1);
     }
+  } catch (int e) {
+    tmp = input;
+    input.clear();
   }
-  void beingTag(string tagName, map<string, string> attribute) {
-  }
-  void endTag(string tagName) {
-  }
-  void text(string textContent) {
-  }
-  bool vectorCompare(vector<string> & a, vector<string> & b) {
-    if (a.size() != b.size()) {
-      return false;
-    }
-    for(int i = 0; i < a.size(); i++) {
-      if (a[i] != b[i]) {
-	return false;
-      }
-    }
-    return true;
+  return tmp;
+}
+
+void SplitStream::getFirstTagPosition(string input, int & begin, int & end) {
+  int tagStart = input.find('<', 0);
+  int tagEnd = input.find('>', tagStart + 1);
+  
+  if (tagEnd == string::npos || tagStart == string::npos) {
+    throw 3;
   }
   
-private:
-  OFStreamFactory * factory;
-  vector<string> currentTag;
-  vector<string> splitTag;
-  bool inSplitArea;
-};
+  begin = tagStart;
+  end = tagEnd;
+}
+
+string SplitStream::getTagName(string input, int & tagType) {
+  int beginTag = input.find('<', 0);
+  
+  if (beginTag != 0) {
+    throw 1;
+  }
+  int firstSpace = input.find(' ', 0);
+  int firstSlash = input.find('/', 1);
+  int firstBrace = input.find('>', 0);
+  if (firstBrace == string::npos) {
+    throw 2;
+  }
+  //This means we are dealing with an end tag.
+  if (firstSlash == 1) {
+    int wordEnd = INT_MAX;
+    if (firstSpace != string::npos) {
+      wordEnd = firstSpace;
+    }
+    if (firstBrace != string::npos && firstBrace < wordEnd) {
+      wordEnd = firstBrace;
+    }
+    tagType = TAGTYPE_END;
+    return input.substr(2, wordEnd - 2);
+  } else {
+    int wordEnd = INT_MAX;
+    if (firstSpace != string::npos) {
+      wordEnd = firstSpace;
+    }
+    if (firstBrace != string::npos && firstBrace < wordEnd) {
+      wordEnd = firstBrace;
+    }
+    if (firstSlash != string::npos && firstSlash < wordEnd) {
+      wordEnd = firstSlash;
+      tagType = TAGTYPE_SINGLETON;
+    } else {
+      tagType = TAGTYPE_BEGIN;
+    }
+    return input.substr(1, wordEnd - 1);
+  }
+}
+bool SplitStream::vectorCompare(vector<string> & a, vector<string> & b) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  for(int i = 0; i < a.size(); i++) {
+    if (a[i] != b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 int test() {
   // Run unit tests
