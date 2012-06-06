@@ -40,9 +40,9 @@ public:
     this->splitTag = splitTag;
     inSplitArea = false;
   }
-
+  
   ~SplitStream() {}
-
+  
   void process(istream & input) {
     string accumulator;
     string line;
