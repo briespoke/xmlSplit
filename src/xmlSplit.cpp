@@ -1,4 +1,4 @@
-#include "main.hpp"
+#include "xmlSplit.hpp"
 
 using namespace std;
 
