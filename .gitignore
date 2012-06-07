@@ -1,0 +1,9 @@
+Makefile
+config.h
+config.log
+config.status
+src/.deps/
+src/Makefile
+src/xmlSplit
+src/xmlSplit.o
+stamp-h1
